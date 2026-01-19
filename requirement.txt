@@ -1,0 +1,17 @@
+django
+djangorestframework
+markdown
+django-filter
+djangorestframework-simplejwt
+drf-spectacular
+pyyaml
+psycopg2-binary
+psycopg2
+dj-rest-auth
+pyotp
+django-allauth
+python-dateutil
+jsonschema
+django-cors-headers
+requests
+cryptography
