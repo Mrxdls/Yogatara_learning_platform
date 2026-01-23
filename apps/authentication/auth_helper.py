@@ -75,3 +75,40 @@ class JWTTokenHelper:
         except jwt.InvalidTokenError as e:
             raise jwt.InvalidTokenError(f"Invalid token: {str(e)}")
         
+    @staticmethod
+    def blacklist_existing_tokens(user):
+        """
+        Blacklist all existing tokens for a user
+        """
+        from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+
+        tokens = OutstandingToken.objects.filter(user=user)
+        BlacklistedToken.objects.bulk_create(
+            [BlacklistedToken(token=token) for token in tokens],
+            ignore_conflicts=True
+        )
+        print(f"Blacklisted {tokens.count()} tokens for user {user.email}")        
+
+
+from rest_framework_simplejwt.tokens import RefreshToken
+
+
+class CustomRefreshToken(RefreshToken):
+    """
+    Custom RefreshToken that adds user claims to both access and refresh tokens
+    """
+
+    @classmethod
+    def for_user(cls, user):
+        token = super().for_user(user)
+
+        # Add custom claims to refresh token
+        token['user_id'] = str(user.id)
+        token['email'] = user.email
+        token['role'] = user.role
+        token['email_verified'] = user.email_verified
+        token['is_superuser'] = user.is_superuser
+        profile = user.profile
+        token['full_name'] = profile.full_name
+
+        return token

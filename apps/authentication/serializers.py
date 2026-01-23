@@ -3,8 +3,13 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User
-from apps.users.models import UserProfile
-from apps.users.serializers import UserProfileSerializer
+from apps.users.models import UserProfile, UserSettings, UserSocial
+from apps.users.serializers import (
+    UserProfileSerializer,
+    UserSettingsSerializer,
+    UserSocialSerializer,
+    UserSkillSerializer
+)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -16,10 +21,28 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserMeSerializer(serializers.ModelSerializer):
-    """Serializer for current user details"""
+    """Serializer for current user details with all related data"""
+    profile = UserProfileSerializer(read_only=True)
+    settings = UserSettingsSerializer(read_only=True)
+    social = UserSocialSerializer(read_only=True)
+    skills = UserSkillSerializer(read_only=True, many=True)
+    
     class Meta:
         model = User
-        fields = ['id', 'email', 'role', 'is_active', 'email_verified', 'created_at', 'updated_at', 'last_login_at']
+        fields = [
+            'id', 
+            'email', 
+            'role', 
+            'is_active', 
+            'email_verified', 
+            'created_at', 
+            'updated_at', 
+            'last_login_at',
+            'profile',
+            'settings',
+            'social',
+            'skills'
+        ]
         read_only_fields = ['id', 'email', 'created_at', 'updated_at', 'last_login_at', 'email_verified']
 
 
@@ -74,6 +97,13 @@ class RegisterSerializer(serializers.ModelSerializer):
             user=user,
             full_name=full_name
         )
+        
+        # Create user settings with defaults
+        UserSettings.objects.create(user=user)
+        
+        # Create user social links (empty initially)
+        UserSocial.objects.create(user=user)
+        
         return user
     
 
@@ -258,13 +288,6 @@ class LogoutSerializer(serializers.Serializer):
     pass
 
 
-class UserMeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ("id", "email", "first_name", "last_name", "created_at")
-
-
-
 class SendVerificationEmailSerializer(serializers.Serializer):
     """Serializer for sending verification email"""
     email = serializers.EmailField(required=True)
@@ -272,3 +295,5 @@ class SendVerificationEmailSerializer(serializers.Serializer):
         choices=[('email_verification', 'Email Verification'), ('password_reset', 'Password Reset')],
         required=True
     )
+
+

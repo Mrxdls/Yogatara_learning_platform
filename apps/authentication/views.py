@@ -27,7 +27,7 @@ from .serializers import (
     SendVerificationEmailSerializer,
     TokenResponseSerializer
 )
-from apps.authentication.auth_helper import JWTTokenHelper, EmailHelper
+from .auth_helper import JWTTokenHelper, EmailHelper, CustomRefreshToken
 
 class SignupView(APIView):
     """User registration endpoint."""
@@ -44,7 +44,7 @@ class SignupView(APIView):
         user = serializer.save()
         
         token = JWTTokenHelper.generate_verification_token(user, "email_verification")
-        verification_link = f"http://localhost:8000/api/auth/verify-email?token={token}"
+        verification_link = f"http://192.168.29.73:8000/api/auth/verify-email?token={token}"
         
         EmailHelper.send_verification_email(user.email, verification_link)
         print(verification_link)
@@ -70,9 +70,9 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
         
         user = serializer.validated_data['user']
-        if user.is_email_verified is False:
+        if user.email_verified is False:
             token = JWTTokenHelper.generate_verification_token(user, "email_verification")
-            verification_link = f"http://localhost:8000/api/auth/verify-email?token={token}"
+            verification_link = f"http://192.168.29.73:8000/api/auth/verify-email?token={token}"
             EmailHelper.send_verification_email(user.email, verification_link)
             print(verification_link)
             return Response(
@@ -80,9 +80,9 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
         else:
-            
-            # Generate JWT tokens
-            refresh = RefreshToken(user)
+            JWTTokenHelper.blacklist_existing_tokens(user)
+            # Generate JWT tokens with custom claims
+            refresh = CustomRefreshToken.for_user(user)
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
 
@@ -187,11 +187,11 @@ class RefreshTokenView(APIView):
         refresh_token = serializer.validated_data["refresh"]
         
         try:
-            token = RefreshToken(refresh_token)
+            token = CustomRefreshToken(refresh_token)
             return Response(
                 {
-                    "access": str(token.access_token),
-                    "refresh": str(token),
+                    "access": str(token.access_token)
+                    # "refresh": str(token),
                 },
                 status=status.HTTP_200_OK
             )
@@ -241,7 +241,7 @@ class PasswordResetRequestView(APIView):
         token = JWTTokenHelper.generate_verification_token(
             serializer.validated_data['email'], "password_reset"
         )
-        # verification_link = f"http://localhost:8000/api/auth/reset-password-confirm?token={token}"
+        # verification_link = f"http://192.168.29.73:8000/api/auth/reset-password-confirm?token={token}"
         # EmailHelper.send_password_reset_email(
             # serializer.validated_data['email'],
             # verification_link
@@ -287,7 +287,7 @@ class SendEmailVerificationView(APIView):
     def post(self, request):
         user = request.user
 
-        if user.is_email_verified:
+        if user.email_verified:
             return Response(
                 {"message": "Email is already verified"},
                 status=status.HTTP_200_OK
@@ -304,7 +304,7 @@ class SendEmailVerificationView(APIView):
             settings.SECRET_KEY,
             algorithm='HS256'
         )
-        verificaiton_link = f"http://localhost:8000/api/auth/verify-email?token={verification_token}"
+        verificaiton_link = f"http://192.168.29.73:8000/api/auth/verify-email?token={verification_token}"
         try:
 
             send_mail(
@@ -351,15 +351,15 @@ class EmailVerificationView(APIView):
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
             user = User.objects.get(id=payload['user_id'])
-            if user.is_email_verified:
+            if user.email_verified:
                 return Response(
                     {"message": "Email is already verified"},
                     status=status.HTTP_200_OK
                 )
-            user.is_email_verified = True
+            user.email_verified = True
             user.save()
-            access = str(RefreshToken.for_user(user).access_token)
-            refresh = str(RefreshToken.for_user(user))
+            access = str(CustomRefreshToken.for_user(user).access_token)
+            refresh = str(CustomRefreshToken.for_user(user))
             return Response(
                 {
                     "message": "Email verified successfully",
