@@ -1,0 +1,148 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: yogatara_postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-yogatara_db}
+      POSTGRES_USER: ${DB_USER:-yogatara_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-yogatara_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "5437:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-yogatara_user} -d ${DB_NAME:-yogatara_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - yogatara_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: yogatara_redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
+    ports:
+      - "6384:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - yogatara_network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yogatara_web
+    command: gunicorn
+    environment:
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: ${DB_NAME:-yogatara_db}
+      DB_USER: ${DB_USER:-yogatara_user}
+      DB_PASSWORD: ${DB_PASSWORD:-yogatara_password}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/1
+      SUPERUSER_EMAIL: ${SUPERUSER_EMAIL:-mridul.kabra23@gmail.com}
+      SUPERUSER_PASSWORD: ${SUPERUSER_PASSWORD:-M@2026yog}
+      SUPERUSER_USERNAME: ${SUPERUSER_USERNAME:-admin}
+    ports:
+      - "8005:8000"
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - yogatara_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yogatara_celery_worker
+    command: celery
+    environment:
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: ${DB_NAME:-yogatara_db}
+      DB_USER: ${DB_USER:-yogatara_user}
+      DB_PASSWORD: ${DB_PASSWORD:-yogatara_password}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/1
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks:
+      - yogatara_network
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yogatara_celery_beat
+    command: celery-beat
+    environment:
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: ${DB_NAME:-yogatara_db}
+      DB_USER: ${DB_USER:-yogatara_user}
+      DB_PASSWORD: ${DB_PASSWORD:-yogatara_password}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/1
+    volumes:
+      - .:/app
+      - celery_beat_schedule:/app/celery_beat_schedule
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks:
+      - yogatara_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_volume:
+  media_volume:
+  celery_beat_schedule:
+
+networks:
+  yogatara_network:
+    driver: bridge

@@ -189,6 +189,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -211,14 +212,13 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@yogatara.com'
 # EMAIL_FILE_PATH = BASE_DIR / 'sent_emails'
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = [
+CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000').split(',') if os.environ.get('CORS_ALLOWED_ORIGINS') else [
     "http://localhost:3000",
     "http://localhost:8000",
     "http://localhost:8080",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8000",
-    "http://192.168.29.92:8080",
-    "http://192.168.29.73:8000",
+    "http://192.168.29.73:8005",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
