@@ -30,7 +30,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-1c#bxsc4jkxyf_!dx!6i8
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',') if os.environ.get('ALLOWED_HOSTS') else []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0,192.168.29.73').split(',') if os.environ.get('ALLOWED_HOSTS') else ['localhost', '127.0.0.1', '0.0.0.0', '192.168.29.73']
 
 
 # Application definition
@@ -55,7 +55,11 @@ INSTALLED_APPS = [
     'apps.calendar_app',
     'apps.dashboard',
     'apps.videos',
-    'corsheaders',  # Add this
+    'corsheaders',
+    
+    # Celery
+    'django_celery_beat',
+    'django_celery_results',
 ]
 
 
@@ -69,12 +73,21 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+    ],
+
 }
+
+# Disable automatic trailing slash redirects for APIs
+APPEND_SLASH = False
 
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=7),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
@@ -201,8 +214,36 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@yogatara.com'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:8000",
+    "http://localhost:8080",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8000",
+    "http://192.168.29.92:8080",
+    "http://192.168.29.73:8000",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Celery Configuration
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes soft limit
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 50  # Restart worker after tasks to prevent memory leaks
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Process one task at a time for uploads
+
+# Celery Beat Settings (for periodic tasks)
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# Bunny CDN Configuration
+BUNNY_STORAGE_ZONE = os.environ.get('BUNNY_STORAGE_ZONE', 'YOUR_STORAGE_ZONE')
+BUNNY_STORAGE_API_KEY = os.environ.get('BUNNY_STORAGE_API_KEY', 'YOUR_STORAGE_API_KEY')
+BUNNY_STORAGE_ENDPOINT = os.environ.get('BUNNY_STORAGE_ENDPOINT', 'https://storage.bunnycdn.com')
+CDN_BASE_URL = os.environ.get('CDN_BASE_URL', 'https://your-pullzone.b-cdn.net')
+BUNNY_STREAM_LIBRARY_ID = os.environ.get('BUNNY_STREAM_LIBRARY_ID', 'YOUR_LIBRARY_ID')
+BUNNY_STREAM_API_KEY = os.environ.get('BUNNY_STREAM_API_KEY', 'YOUR_STREAM_API_KEY')
+BUNNY_STREAM_TOKEN_SECRET = os.environ.get('BUNNY_STREAM_TOKEN_SECRET', 'YOUR_STREAM_TOKEN_SECRET')
