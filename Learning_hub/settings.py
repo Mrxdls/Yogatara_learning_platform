@@ -78,7 +78,10 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.FormParser',
         'rest_framework.parsers.MultiPartParser',
     ],
-
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+    "DEFAULT_EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
 }
 
 # Disable automatic trailing slash redirects for APIs
@@ -212,6 +215,7 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@yogatara.com'
 # EMAIL_FILE_PATH = BASE_DIR / 'sent_emails'
 
 # CORS Configuration
+CORS_ALLOW_ALL_ORIGINS = True  # ⚠️ WARNING: Allows all origins - use only for development!
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000').split(',') if os.environ.get('CORS_ALLOWED_ORIGINS') else [
     "http://localhost:3000",
     "http://localhost:8000",
@@ -247,3 +251,9 @@ CDN_BASE_URL = os.environ.get('CDN_BASE_URL', 'https://your-pullzone.b-cdn.net')
 BUNNY_STREAM_LIBRARY_ID = os.environ.get('BUNNY_STREAM_LIBRARY_ID', 'YOUR_LIBRARY_ID')
 BUNNY_STREAM_API_KEY = os.environ.get('BUNNY_STREAM_API_KEY', 'YOUR_STREAM_API_KEY')
 BUNNY_STREAM_TOKEN_SECRET = os.environ.get('BUNNY_STREAM_TOKEN_SECRET', 'YOUR_STREAM_TOKEN_SECRET')
+
+
+# Razorpay Configuration
+RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', 'your_razorpay_key_id')
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', 'your_razorpay_key_secret')
+RAZORPAY_WEBHOOK_SECRET = os.environ.get('RAZORPAY_WEBHOOK_SECRET', 'your_razorpay_webhook_secret')

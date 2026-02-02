@@ -16,12 +16,17 @@ DJANGO_SUPERUSER_PASSWORD=$SUPERUSER_PASSWORD \
 DJANGO_SUPERUSER_EMAIL=$SUPERUSER_EMAIL \
 python manage.py createsuperuser --noinput --skip-checks 2>/dev/null || true
 
+# Ensure static files directory exists and has proper permissions
+mkdir -p /app/staticfiles
+chown -R appuser:appuser /app/staticfiles
+
 # Collect static files
 python manage.py collectstatic --noinput
 
+# Switch to appuser for security
 if [ "$1" = "gunicorn" ]; then
     echo "Starting Gunicorn..."
-    gunicorn \
+    su -c "gunicorn \
         --bind 0.0.0.0:8000 \
         --workers 4 \
         --worker-class sync \
@@ -29,7 +34,7 @@ if [ "$1" = "gunicorn" ]; then
         --access-logfile - \
         --error-logfile - \
         --log-level info \
-        Learning_hub.wsgi:application
+        Learning_hub.wsgi:application" appuser
 elif [ "$1" = "celery" ]; then
     echo "Starting Celery Worker..."
     celery -A Learning_hub worker -l info --concurrency=4
