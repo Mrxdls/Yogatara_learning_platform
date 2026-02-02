@@ -6,39 +6,37 @@ class AssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Assignment
         fields = '__all__'
-        read_only_fields = 'id', 'created_at', 'updated_at'
+        read_only_fields = ('id', 'created_at', 'updated_at')
+
+
 class AssignmentQuestionSerializer(serializers.ModelSerializer):
-    # get an serializer for get question details
+    """Serializer for question details (excludes correct_answer for students)"""
     class Meta:
         model = Question
         fields = '__all__'
-        read_only_fields = 'id', 'created_at', 'updated_at'
+        read_only_fields = ('id', 'created_at', 'updated_at')
 
-    # send questions and receive answers
+
+class QuestionAttemptRequestSerializer(serializers.Serializer):
+    """Serializer for question attempt request body (what the client sends)"""
+    question = serializers.PrimaryKeyRelatedField(queryset=Question.objects.all())
+    answer = serializers.JSONField()
+    attempt_number = serializers.IntegerField(default=1, min_value=1)
+    status = serializers.ChoiceField(
+        choices=QuestionAttempt.Status.choices,
+        default=QuestionAttempt.Status.IN_PROGRESS
+    )
+
+
 class QuestionAttemptSerializer(serializers.ModelSerializer):
-    is_correct = serializers.SerializerMethodField()
+    """Full serializer for question attempt responses"""
+    is_correct = serializers.BooleanField(read_only=True)
+    enrollment = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = QuestionAttempt
         fields = '__all__'
-        read_only_fields = 'id', 'created_at', 'updated_at', 'is_correct'
-
-    # def get_is_correct(self, obj):
-    #     """Check if the provided answer is correct based on question type"""
-    #     question_type = obj.question.question_type
-        
-    #     if question_type == 'mcq':
-    #         # Single correct answer
-    #         correct_keys = [item.get('key') for item in obj.question.correct_answer if isinstance(item, dict)]
-    #         given_keys = [item.get('key') for item in obj.answer if isinstance(item, dict)]
-    #         return len(given_keys) == 1 and given_keys[0] in correct_keys
-        
-    #     elif question_type == 'msq':
-    #         # Multiple correct answers
-    #         correct_keys = [item.get('key') for item in obj.question.correct_answer if isinstance(item, dict)]
-    #         given_keys = [item.get('key') for item in obj.answer if isinstance(item, dict)]
-    #         return set(correct_keys) == set(given_keys)
-    #     return False
+        read_only_fields = ('id', 'created_at', 'updated_at', 'started_at', 'is_correct', 'enrollment')
 
     def validate(self, data):
         """Validate the answer based on question type"""
@@ -75,7 +73,7 @@ class QuestionAttemptSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Create the question attempt and set is_correct"""
         instance = super().create(validated_data)
-        instance.is_correct_answer()
+        instance.is_correct = instance.is_correct_answer()
         instance.save()
         return instance 
 

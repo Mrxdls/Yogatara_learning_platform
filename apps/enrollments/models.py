@@ -79,6 +79,10 @@ class Enrollment(models.Model):
                           models.Q(progress_percentage__lte=100),
                 name='valid_progress_percentage'
             ),
+            models.CheckConstraint(
+                condition=models.Q(payment_status__in=['free', 'pending', 'paid', 'refunded', 'expired']),
+                name='valid_enrollment_payment_status'
+            ),
             models.UniqueConstraint(
                 fields=['user', 'course'],
                 name='unique_user_course_enrollment'
@@ -302,6 +306,12 @@ class Payment(models.Model):
             models.Index(fields=['razorpay_order_id']),
             models.Index(fields=['razorpay_payment_id']),
             models.Index(fields=['status']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=['created', 'authorized', 'captured', 'failed', 'refunded']),
+                name='valid_payment_status'
+            ),
         ]
 
     def mark_authorized(self, payment_id, signature):

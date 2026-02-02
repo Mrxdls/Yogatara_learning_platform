@@ -172,6 +172,16 @@ class Course(models.Model):
         verbose_name = 'Course'
         verbose_name_plural = 'Courses'
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(level__in=['Beginner', 'Intermediate', 'Advanced', 'All Levels', '']),
+                name='valid_course_level'
+            ),
+            models.CheckConstraint(
+                check=models.Q(status__in=['draft', 'published', 'archived']),
+                name='valid_course_status'
+            ),
+        ]
 
     def __str__(self):
         return self.title
@@ -381,6 +391,12 @@ class Lecture(models.Model):
         verbose_name_plural = 'Lectures'
         ordering = ['section', 'order_index']
         unique_together = ['section', 'order_index']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(content_type__in=['video']),
+                name='valid_lecture_content_type'
+            ),
+        ]
 
     def __str__(self):
         return f"{self.section.title} - {self.title}"
@@ -428,6 +444,12 @@ class Coupon(models.Model):
         verbose_name = 'Coupon'
         verbose_name_plural = 'Coupons'
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(discount_type__in=['percent', 'fixed']),
+                name='valid_coupon_discount_type'
+            ),
+        ]
 
     def __str__(self):
         return self.code

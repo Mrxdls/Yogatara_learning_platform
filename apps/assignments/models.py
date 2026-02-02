@@ -217,6 +217,12 @@ class QuestionAttempt(models.Model):
         verbose_name_plural = 'Question Attempts'
         ordering = ['-started_at']
         unique_together = ['question', 'enrollment', 'attempt_number']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(status__in=['in_progress', 'submitted', 'graded']),
+                name='valid_question_attempt_status'
+            ),
+        ]
 
     def is_correct_answer(self):
         """Check if the provided answer is correct based on question type"""
@@ -296,6 +302,12 @@ class AssignmentSubmission(models.Model):
         verbose_name_plural = 'Assignment Submissions'
         unique_together = ['assignment', 'enrollment']
         ordering = ['-submitted_at']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(status__in=['submitted', 'graded', 'pending']),
+                name='valid_assignment_submission_status'
+            ),
+        ]
 
 
     # score calculate percentage through all attempt questions 
