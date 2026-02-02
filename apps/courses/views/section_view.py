@@ -118,7 +118,8 @@ class SectionViewSet(viewsets.ModelViewSet):
     )
     def destroy(self, request, *args, **kwargs):
         """Delete an existing section (superuser only)"""
-        if not request.user.is_superuser:
-            raise PermissionDenied("Only superusers can delete sections.")
-        return super().destroy(request, *args, **kwargs)
+        raise NotImplementedError("Section deletion is currently disabled.")
+        # if not request.user.is_superuser:
+        #     raise PermissionDenied("Only superusers can delete sections.")
+        # return super().destroy(request, *args, **kwargs)
 

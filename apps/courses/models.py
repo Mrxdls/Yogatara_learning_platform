@@ -1,3 +1,4 @@
+from django.utils import timezone
 import uuid
 from django.db import models
 from django.conf import settings
@@ -250,7 +251,7 @@ class CoursePricing(models.Model):
         null=True,
         blank=True
     )
-    currency = models.CharField(max_length=3, default='USD')
+    currency = models.CharField(max_length=3, default='INR')
     is_free = models.BooleanField(default=False)
     
     # Sale period
@@ -345,9 +346,6 @@ class Lecture(models.Model):
     """
     CONTENT_TYPE_CHOICES = [
         ('video', 'Video'),
-        ('pdf', 'PDF'),
-        ('quiz', 'Quiz'),
-        ('text', 'Text'),
     ]
 
     id = models.UUIDField(
@@ -365,11 +363,12 @@ class Lecture(models.Model):
     description = models.TextField(blank=True)
     content_type = models.CharField(
         max_length=10,
-        choices=CONTENT_TYPE_CHOICES
+        choices=CONTENT_TYPE_CHOICES,
+        default='video'
     )
-    duration_seconds = models.IntegerField(null=True, blank=True)
+    content_url = models.CharField(max_length=500, blank=True)
     order_index = models.IntegerField()
-    is_preview = models.BooleanField(default=False)
+    # is_preview = models.BooleanField(default=False)
     is_published = models.BooleanField(default=True)
     
     # Timestamps
@@ -385,3 +384,153 @@ class Lecture(models.Model):
 
     def __str__(self):
         return f"{self.section.title} - {self.title}"
+
+
+class Coupon(models.Model):
+    """
+    Coupon model - stores coupon/discount codes.
+    Maps to 'coupons' table in the database.
+    """
+    DISCOUNT_TYPE_CHOICES = [
+        ('percent', 'Percentage Off'),
+        ('fixed', 'Fixed Amount Off'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+    code = models.CharField(max_length=50, unique=True)
+    
+    # Discount details (either percent OR fixed, not both)
+    discount_type = models.CharField(
+        max_length=10,
+        choices=DISCOUNT_TYPE_CHOICES
+    )
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Validity
+    valid_from = models.DateTimeField(null=True, blank=True)
+    valid_to = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    
+    # Usage limits
+    max_uses = models.IntegerField(null=True, blank=True)  # NULL = unlimited
+    current_uses = models.IntegerField(default=0)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'coupons'
+        verbose_name = 'Coupon'
+        verbose_name_plural = 'Coupons'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.code
+
+    def is_expired(self):
+        """Check if coupon has expired"""
+        now = timezone.now()
+        if self.valid_from and now < self.valid_from:
+            return True
+        if self.valid_to and now > self.valid_to:
+            return True
+        return False
+
+    def can_be_used(self):
+        """Check if coupon can be used based on active status and usage limits"""
+        if not self.is_active:
+            return False
+        if self.max_uses is not None and self.current_uses >= self.max_uses:
+            return False
+        if self.is_expired():
+            return False
+        return True
+
+    def is_for_all_users(self):
+        """Check if coupon is available to all users (no specific eligibility records)"""
+        return not self.student_eligibilities.exists()
+
+    def is_for_specific_users(self):
+        """Check if coupon is restricted to specific users only"""
+        return self.student_eligibilities.exists()
+    
+
+class CouponCourse(models.Model):
+    """
+    Coupon-Course relationship model - which courses a coupon applies to (Many-to-Many).
+    Maps to 'coupon_courses' table in the database.
+    """
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+
+    coupon = models.ForeignKey(
+        Coupon,
+        on_delete=models.CASCADE,
+        related_name='coupon_courses'
+    )
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name='coupon_courses'
+    )
+    
+    is_applicable = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'coupon_courses'
+        verbose_name = 'Coupon Course'
+        verbose_name_plural = 'Coupon Courses'
+        unique_together = ['coupon', 'course']
+
+    def __str__(self):
+        return f"{self.coupon.code} - {self.course.title}"
+
+
+
+class StudentCouponEligibility(models.Model):
+    """
+    Student Coupon Eligibility model - tracks which students can use which coupons.
+    Maps to 'student_coupon_eligibility' table in the database.
+    """
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='coupon_eligibilities'
+    )
+    coupon = models.ForeignKey(
+        Coupon,
+        on_delete=models.CASCADE,
+        related_name='student_eligibilities'
+    )
+    
+    # Usage tracking
+    is_used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(null=True, blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'student_coupon_eligibility'
+        verbose_name = 'Student Coupon Eligibility'
+        verbose_name_plural = 'Student Coupon Eligibilities'
+        unique_together = ['student', 'coupon']
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.student.email} - {self.coupon.code}"

@@ -14,13 +14,17 @@ from django.shortcuts import get_object_or_404
 import traceback
 import tempfile
 import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+from apps.enrollments.models import Enrollment
 
 
 from ..models import Course, Category, CoursePricing, Section, Lecture
 from ..serializers import (
     LectureDetailSerializer,
     LectureCreateSerializer,
-    LectureReadSerializer,
 )
 from core.bg_task import delete_video_task, upload_video_task
 from core.cdn_helper import BunnyService
@@ -46,9 +50,7 @@ class LectureViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'create':
             return LectureCreateSerializer
-        elif self.action in ['retrieve', 'update', 'partial_update']:
-            return LectureDetailSerializer
-        return LectureReadSerializer
+        return LectureDetailSerializer
 
     def get_queryset(self):
         """Filter lectures by section_id if provided"""
@@ -58,11 +60,11 @@ class LectureViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(section_id=section_id)
         return queryset
 
-    def get_parsers(self):
-        """Use multipart parser only for create action, JSON for others"""
-        if self.action == 'create':
-            return [MultiPartParser(), FormParser()]
-        return super().get_parsers()
+    # def get_parsers(self):
+    #     """Use multipart parser only for create action, JSON for others"""
+    #     if self.action == 'create':
+    #         return [MultiPartParser(), FormParser()]
+    #     return super().get_parsers()
 
     @extend_schema(
         tags=['Lectures'],
@@ -112,27 +114,38 @@ class LectureViewSet(viewsets.ModelViewSet):
             }
         },
         responses={
-            201: LectureReadSerializer,
+            201: LectureDetailSerializer,
             400: {'description': 'Bad request - missing required fields or invalid section_id'},
             403: {'description': 'Forbidden - requires superuser authentication'},
         },
     )
     def create(self, request, section_id=None, *args, **kwargs):
         """Create a new lecture with file upload"""
-        if not request.user.is_superuser:
-            raise PermissionDenied("Only superusers can create lectures.")
-
-        # Get section_id from kwargs or request data
-        section_id = section_id or self.kwargs.get('section_id') or request.data.get('section_id')
-        
-        if section_id is None:
-            return Response(
-                {"detail": "Section ID is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+        import uuid as uuid_module
         temp_path = None
         try:
+            if not request.user.is_superuser:
+                raise PermissionDenied("Only superusers can create lectures.")
+
+            # Get section_id from kwargs or request data
+            section_id = section_id or self.kwargs.get('section_id') or request.data.get('section_id')
+            
+            if section_id is None:
+                return Response(
+                    {"detail": "Section ID is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate section_id is a valid UUID
+            try:
+                if isinstance(section_id, str):
+                    uuid_module.UUID(section_id)
+            except ValueError:
+                return Response(
+                    {"detail": "Invalid section_id format. Must be a valid UUID."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             content_file = request.FILES.get('file')
             if not content_file:
                 return Response(
@@ -163,7 +176,7 @@ class LectureViewSet(viewsets.ModelViewSet):
             )
 
             return Response(
-                LectureReadSerializer(lecture, context={'request': request}).data,
+                LectureDetailSerializer(lecture, context={'request': request}).data,
                 status=status.HTTP_201_CREATED
             )
         except Exception as e:
@@ -171,9 +184,9 @@ class LectureViewSet(viewsets.ModelViewSet):
             if temp_path and os.path.exists(temp_path):
                 os.remove(temp_path)
             
-            # Print and return full traceback for debugging
+            # Log and return full traceback for debugging
             error_traceback = traceback.format_exc()
-            print(f"Error in POST lecture endpoint: {error_traceback}")
+            logger.error(f"Error in POST lecture endpoint: {error_traceback}")
             return Response(
                 {
                     "detail": "Internal server error",
@@ -203,6 +216,14 @@ class LectureViewSet(viewsets.ModelViewSet):
     @extend_schema(tags=['Lectures'], operation_id='lectures_retrieve')
     def retrieve(self, request, *args, **kwargs):
         """Retrieve a single lecture"""
+        
+        enrollment_exists = Enrollment.objects.filter(
+            user=request.user,
+            course__sections__lectures__id=kwargs['pk'],
+            is_active=True
+        ).exists()
+        if not enrollment_exists and not request.user.is_superuser:
+            raise PermissionDenied("You must be enrolled in the course to access this lecture.")
         return super().retrieve(request, *args, **kwargs)
 
     @extend_schema(
