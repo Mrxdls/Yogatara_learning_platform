@@ -3,146 +3,83 @@ services:
     image: postgres:16-alpine
     container_name: yogatara_postgres
     environment:
-      POSTGRES_DB: ${DB_NAME:-yogatara_db}
-      POSTGRES_USER: ${DB_USER:-yogatara_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-yogatara_password}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
-    ports:
-      - "5437:5432"
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-yogatara_user} -d ${DB_NAME:-yogatara_db}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - yogatara_network
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     container_name: yogatara_redis
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
-    ports:
-      - "6384:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - yogatara_network
+    restart: unless-stopped
 
   web:
+    image: yogatara_web
     build:
       context: .
-      dockerfile: Dockerfile
     container_name: yogatara_web
-    command: gunicorn
-    environment:
-      DEBUG: ${DEBUG:-False}
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
-      DB_ENGINE: django.db.backends.postgresql
-      DB_NAME: ${DB_NAME:-yogatara_db}
-      DB_USER: ${DB_USER:-yogatara_user}
-      DB_PASSWORD: ${DB_PASSWORD:-yogatara_password}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/1
-      SUPERUSER_EMAIL: ${SUPERUSER_EMAIL:-mridul.kabra23@gmail.com}
-      SUPERUSER_PASSWORD: ${SUPERUSER_PASSWORD:-M@2026yog}
-      SUPERUSER_USERNAME: ${SUPERUSER_USERNAME:-admin}
+    command: >
+      gunicorn Learning_hub.wsgi:application
+      --bind 0.0.0.0:8000
+      --workers 3
+      --timeout 60
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8005:8000"
     volumes:
-      - .:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/media
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - yogatara_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    restart: unless-stopped
 
   celery_worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: yogatara_web
     container_name: yogatara_celery_worker
-    command: celery
-    environment:
-      DEBUG: ${DEBUG:-False}
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
-      DB_ENGINE: django.db.backends.postgresql
-      DB_NAME: ${DB_NAME:-yogatara_db}
-      DB_USER: ${DB_USER:-yogatara_user}
-      DB_PASSWORD: ${DB_PASSWORD:-yogatara_password}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/1
-    volumes:
-      - .:/app
+    command: celery -A Learning_hub worker -l info --concurrency=4
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      web:
-        condition: service_healthy
-    networks:
-      - yogatara_network
+    restart: unless-stopped
 
   celery_beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: yogatara_web
     container_name: yogatara_celery_beat
-    command: celery-beat
-    environment:
-      DEBUG: ${DEBUG:-False}
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
-      DB_ENGINE: django.db.backends.postgresql
-      DB_NAME: ${DB_NAME:-yogatara_db}
-      DB_USER: ${DB_USER:-yogatara_user}
-      DB_PASSWORD: ${DB_PASSWORD:-yogatara_password}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/1
-    volumes:
-      - .:/app
-      - celery_beat_schedule:/app/celery_beat_schedule
+    command: celery -A Learning_hub beat -l info
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      web:
-        condition: service_healthy
-    networks:
-      - yogatara_network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
   static_volume:
   media_volume:
-  celery_beat_schedule:
-
-networks:
-  yogatara_network:
-    driver: bridge

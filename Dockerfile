@@ -1,60 +1,68 @@
-# Build stage
-FROM python:3.11-slim as builder
+# ----------------------------
+# Builder stage
+# ----------------------------
+FROM python:3.11-slim AS builder
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies
+WORKDIR /build
+
+# System deps needed only for building wheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment
+# Create virtualenv
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy requirements and install Python dependencies
+# Install dependencies
 COPY requirements.txt .
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt
 
+# ----------------------------
 # Runtime stage
+# ----------------------------
 FROM python:3.11-slim
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
     DJANGO_SETTINGS_MODULE=Learning_hub.settings
 
-# Install runtime dependencies
+# Runtime system deps only
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
-    postgresql-client \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy virtual environment from builder
+# Create non-root user
+RUN useradd -m -u 1000 appuser
+
+WORKDIR /app
+
+# Copy virtualenv from builder
 COPY --from=builder /opt/venv /opt/venv
 
-# Create app directory and non-root user
-WORKDIR /app
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+# Copy project source
+COPY . .
 
-# Copy application code
-COPY --chown=appuser:appuser . .
+# Fix ownership
+RUN chown -R appuser:appuser /app
 
-# Make entrypoint executable
-RUN chmod +x /app/entrypoint.sh
+# Switch to non-root user
+USER appuser
 
-# Expose port
+# Collect static at build time
+RUN python manage.py collectstatic --noinput
+
+# Expose app port
 EXPOSE 8000
 
-# Run entrypoint
-ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["gunicorn"]
+# Default command (override in compose for celery / beat)
+CMD ["gunicorn", "Learning_hub.wsgi:application", "--bind", "0.0.0.0:8000"]
