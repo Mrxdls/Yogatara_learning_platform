@@ -1,6 +1,8 @@
 from Learning_hub.celery import app
 from celery import shared_task
 from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
+from django.conf import settings
 from core.cdn_helper import BunnyService
 import os
 import logging
@@ -97,4 +99,44 @@ def delete_video_task(video_url):
         return result
     except Exception as e:
         logger.error(f"[Video Delete] Task failed: {str(e)}", exc_info=True)
+        raise
+
+
+@app.task(name="send_verification_email")
+def send_verification_email_task(email, verification_link):
+    """Send email verification link in background."""
+    logger.info(f"[Email] Sending verification email to {email}")
+    
+    try:
+        send_mail(
+            subject="Verify your email address",
+            message=f"Please verify your email by clicking the following link: {verification_link}",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        logger.info(f"[Email] Verification email sent successfully to {email}")
+        return {"success": True, "email": email}
+    except Exception as e:
+        logger.error(f"[Email] Failed to send verification email: {str(e)}", exc_info=True)
+        raise
+
+
+@app.task(name="send_password_reset_email")
+def send_password_reset_email_task(email, reset_link):
+    """Send password reset link in background."""
+    logger.info(f"[Email] Sending password reset email to {email}")
+    
+    try:
+        send_mail(
+            subject="Reset your password",
+            message=f"Click the following link to reset your password: {reset_link}\n\nThis link will expire in 1 hour.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        logger.info(f"[Email] Password reset email sent successfully to {email}")
+        return {"success": True, "email": email}
+    except Exception as e:
+        logger.error(f"[Email] Failed to send password reset email: {str(e)}", exc_info=True)
         raise

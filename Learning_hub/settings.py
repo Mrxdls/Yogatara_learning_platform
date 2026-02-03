@@ -82,6 +82,7 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
     ],
     "DEFAULT_EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
+    'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
 }
 
 # Disable automatic trailing slash redirects for APIs
@@ -96,26 +97,46 @@ SIMPLE_JWT = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Yogatara Learning Platform API",
-    "DESCRIPTION": "API documentation for Yogatara Learning Platform",
-    "VERSION": "1.0.0",
-    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
-    "SCHEMA_PATH_PREFIX": "/api",
-    "ENUM_NAME_OVERRIDES": {},
-    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
+    'TITLE': 'Yogatara Learning Platform API',
+    'DESCRIPTION': 'API for Yogatara Learning Platform',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SCHEMA_COERCE_METHOD_NAMES': {
+        'list': 'list',
+        'retrieve': 'get',
+    },
+    # Automatically add response time headers to ALL endpoints in OpenAPI schema
+    'POSTPROCESSING_HOOKS': ['core.schema.response_headers_postprocessing'],
+    # Define reusable header components
+    'APPEND_COMPONENTS': {
+        'headers': {
+            'X-Response-Time': {
+                'description': 'Response time in seconds',
+                'schema': {'type': 'string', 'example': '0.045s'}
+            },
+            'X-Response-Time-Ms': {
+                'description': 'Response time in milliseconds',
+                'schema': {'type': 'string', 'example': '45ms'}
+            }
+        }
+    },
 }
+
+
 
 
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # Add this FIRST (before other middleware)
     'django.middleware.security.SecurityMiddleware',
+    'core.middleware.ResponseTimeMiddleware',  # Add this
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.GlobalExceptionMiddleware',  # ADD THIS
 ]
 
 ROOT_URLCONF = 'Learning_hub.urls'

@@ -149,18 +149,19 @@ class BunnyService:
     # ============ STREAM LINK ============
 
     @classmethod
-    def get_streaming_link(cls, video_id, expires_in_seconds=300):
+    def get_streaming_link(cls, video_id, expires_in_seconds=3600):
+        """
+        Generate signed streaming URL for Bunny Stream.
+        Token format: SHA256_HEX(token_security_key + video_id + expiration)
+        """
         expires = int(time.time()) + expires_in_seconds
-        path = f"/embed/{cls.BUNNY_STREAM_LIBRARY_ID}/{video_id}"
-        security_string = f"{path}{expires}"
-        signature = base64.urlsafe_b64encode(
-            hmac.new(
-                cls.BUNNY_STREAM_TOKEN_SECRET.encode(),
-                security_string.encode(),
-                hashlib.sha256
-            ).digest()
-        ).decode().rstrip("=")
-        stream_url = f"https://iframe.mediadelivery.net{path}?token={signature}&expires={expires}"
+        
+        # Bunny Stream token format: SHA256_HEX(token_security_key + video_id + expiration)
+        security_string = f"{cls.BUNNY_STREAM_TOKEN_SECRET}{video_id}{expires}"
+        token = hashlib.sha256(security_string.encode()).hexdigest()
+        
+        # Use iframe embed URL
+        stream_url = f"https://iframe.mediadelivery.net/embed/{cls.BUNNY_STREAM_LIBRARY_ID}/{video_id}?token={token}&expires={expires}"
         return stream_url
 
     # ============ VIDEO LIST & DETAILS ============

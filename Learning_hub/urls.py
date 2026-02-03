@@ -35,8 +35,8 @@ urlpatterns = [
     path('api/courses/', include('apps.courses.urls')),
     path('api/assignments/', include('apps.assignments.urls')),
     path('api/enrollments/', include('apps.enrollments.urls')),
-    # path('api/calendar/', include('apps.calendar_app.urls')),
-    # path('api/dashboard/', include('apps.dashboard.urls')),
+    path('api/dashboard/', include('apps.dashboard.urls')),
+    path('api/calendar/', include('apps.calendar_app.urls')),
     # path('api/videos/', include('apps.videos.urls')),
     
     # Swagger & OpenAPI

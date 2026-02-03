@@ -10,6 +10,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from django.core.mail import send_mail
 from django.utils import timezone
+from core.bg_task import send_verification_email_task, send_password_reset_email_task
 
 from Learning_hub import settings
 from apps.authentication.models import User
@@ -46,7 +47,8 @@ class SignupView(APIView):
         token = JWTTokenHelper.generate_verification_token(user, "email_verification")
         verification_link = f"http://192.168.29.73:8000/api/auth/verify-email?token={token}"
         
-        EmailHelper.send_verification_email(user.email, verification_link)
+        # Send email in background task
+        send_verification_email_task.delay(user.email, verification_link)
         print(verification_link)
         return Response(
             {
@@ -73,7 +75,8 @@ class LoginView(APIView):
         if user.email_verified is False:
             token = JWTTokenHelper.generate_verification_token(user, "email_verification")
             verification_link = f"http://192.168.29.73:8000/api/auth/verify-email?token={token}"
-            EmailHelper.send_verification_email(user.email, verification_link)
+            # Send email in background task
+            send_verification_email_task.delay(user.email, verification_link)
             print(verification_link)
             return Response(
                 {"error": "Email is not verified. Please verify your email before logging in."},
@@ -305,24 +308,14 @@ class SendEmailVerificationView(APIView):
             algorithm='HS256'
         )
         verificaiton_link = f"http://192.168.29.73:8000/api/auth/verify-email?token={verification_token}"
-        try:
-
-            send_mail(
-                subject="Verify your email address",
-                message=f"Please verify your email by clicking the following link: {verificaiton_link}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=False,
-            )
-            return Response(
-                {"message": "Verification email sent successfully"},
-                status=status.HTTP_200_OK
-            )
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to send verification email: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        
+        # Send email in background task
+        send_verification_email_task.delay(user.email, verificaiton_link)
+        
+        return Response(
+            {"message": "Verification email sent successfully"},
+            status=status.HTTP_200_OK
+        )
 class EmailVerificationView(APIView):
     """Verify email address with token."""
 
