@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.utils.text import slugify
-
+from django.db import models
 
 from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.types import OpenApiTypes
@@ -32,6 +32,7 @@ class LectureCreateSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'content_type': {'default': 'video'},
             'is_published': {'default': True},
+            'order_index': {'required': False, 'allow_null': True},
         }
     
     # Override to explicitly set binary format
@@ -49,7 +50,7 @@ class LectureCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_order_index(self, value):
-        if value < 1:
+        if value and value < 1:
             raise serializers.ValidationError("Order must be a positive integer.")
         return value
 
@@ -62,6 +63,18 @@ class LectureCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Invalid video format.")
 
         return value
+    
+    def save(self, **kwargs):
+        # Always auto-assign order_index for new lectures
+        section = kwargs.get('section')
+        if section and not self.instance:  # Only for creating new instances
+            # Get the max order_index for this section and add 1
+            max_order = Lecture.objects.filter(section=section).aggregate(
+                max_order=models.Max('order_index')
+            )['max_order']
+            self.validated_data['order_index'] = (max_order or 0) + 1
+        
+        return super().save(**kwargs)
     
     def create(self, validated_data):
         # Remove 'file' from validated_data as it's not a model field
